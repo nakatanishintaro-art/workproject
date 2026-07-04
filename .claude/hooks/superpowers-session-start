@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SessionStart hook for superpowers skills (project-level install)
+# Injects the using-superpowers skill so Claude knows to reach for skills
+# before acting. Adapted from obra/superpowers for a repo-local .claude install.
+
+set -euo pipefail
+
+# Resolve .claude root from this script's location (.claude/hooks/..)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLAUDE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+using_superpowers_content=$(cat "${CLAUDE_ROOT}/skills/using-superpowers/SKILL.md" 2>&1 || echo "Error reading using-superpowers skill")
+
+# Escape string for JSON embedding using bash parameter substitution.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+using_superpowers_escaped=$(escape_for_json "$using_superpowers_content")
+session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers.\n\n**Below is the full content of your 'using-superpowers' skill - your introduction to using skills. For all other skills, use the 'Skill' tool:**\n\n${using_superpowers_escaped}\n</EXTREMELY_IMPORTANT>"
+
+# Claude Code reads hookSpecificOutput.additionalContext for SessionStart.
+# printf (not heredoc) avoids a bash 5.3+ heredoc hang.
+printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+
+exit 0
